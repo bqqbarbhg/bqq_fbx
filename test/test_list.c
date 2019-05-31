@@ -10,7 +10,7 @@
 static void indent(int amount)
 {
 	for (int i = 0; i < amount; i++) {
-		putchar(' ');
+		printf("    ");
 	}
 }
 
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
 			case bfbx_prop_f64: printf(" %f", prop.value.f64); break;
 			case bfbx_prop_bool: printf(" %s", prop.value.bool_ ? "true" : "false"); break;
 			case bfbx_prop_string: printf(" \"%.*s\"", prop.value.string.length, prop.value.string.data); break;
-			case bfbx_prop_binary: printf(" b\"%.*s\"", prop.value.binary.length, prop.value.binary.data); break;
+			case bfbx_prop_binary: printf(" (binary %u bytes)", prop.value.binary.length); break;
 			case bfbx_prop_array_s32: printf(" [s32 x %u]", prop.value.array.length); break;
 			case bfbx_prop_array_s64: printf(" [s64 x %u]", prop.value.array.length); break;
 			case bfbx_prop_array_f32: printf(" [f32 x %u]", prop.value.array.length); break;

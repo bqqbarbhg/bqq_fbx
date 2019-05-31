@@ -1,0 +1,449 @@
+FBX version 7400
+FBXHeaderExtension:
+    FBXHeaderVersion: 1003
+    FBXVersion: 7400
+    EncryptionType: 0
+    CreationTimeStamp:
+        Version: 1000
+        Year: 2019
+        Month: 5
+        Day: 31
+        Hour: 18
+        Minute: 19
+        Second: 14
+        Millisecond: 642
+    Creator: "Blender (stable FBX IO) - 2.80 (sub 73) - 4.14.13"
+    SceneInfo: "GlobalInfo" "UserData"
+        Type: "UserData"
+        Version: 100
+        MetaData:
+            Version: 100
+            Title: ""
+            Subject: ""
+            Author: ""
+            Keywords: ""
+            Revision: ""
+            Comment: ""
+        Properties70:
+            P: "DocumentUrl" "KString" "Url" "" "/foobar.fbx"
+            P: "SrcDocumentUrl" "KString" "Url" "" "/foobar.fbx"
+            P: "Original" "Compound" "" ""
+            P: "Original|ApplicationVendor" "KString" "" "" "Blender Foundation"
+            P: "Original|ApplicationName" "KString" "" "" "Blender (stable FBX IO)"
+            P: "Original|ApplicationVersion" "KString" "" "" "2.80 (sub 73)"
+            P: "Original|DateTime_GMT" "DateTime" "" "" "01/01/1970 00:00:00.000"
+            P: "Original|FileName" "KString" "" "" "/foobar.fbx"
+            P: "LastSaved" "Compound" "" ""
+            P: "LastSaved|ApplicationVendor" "KString" "" "" "Blender Foundation"
+            P: "LastSaved|ApplicationName" "KString" "" "" "Blender (stable FBX IO)"
+            P: "LastSaved|ApplicationVersion" "KString" "" "" "2.80 (sub 73)"
+            P: "LastSaved|DateTime_GMT" "DateTime" "" "" "01/01/1970 00:00:00.000"
+FileId: (binary 16 bytes)
+CreationTime: "1970-01-01 10:00:00:000"
+Creator: "Blender (stable FBX IO) - 2.80 (sub 73) - 4.14.13"
+GlobalSettings:
+    Version: 1000
+    Properties70:
+        P: "UpAxis" "int" "Integer" "" 1
+        P: "UpAxisSign" "int" "Integer" "" 1
+        P: "FrontAxis" "int" "Integer" "" 2
+        P: "FrontAxisSign" "int" "Integer" "" 1
+        P: "CoordAxis" "int" "Integer" "" 0
+        P: "CoordAxisSign" "int" "Integer" "" 1
+        P: "OriginalUpAxis" "int" "Integer" "" -1
+        P: "OriginalUpAxisSign" "int" "Integer" "" 1
+        P: "UnitScaleFactor" "double" "Number" "" 1.000000
+        P: "OriginalUnitScaleFactor" "double" "Number" "" 1.000000
+        P: "AmbientColor" "ColorRGB" "Color" "" 0.000000 0.000000 0.000000
+        P: "DefaultCamera" "KString" "" "" "Producer Perspective"
+        P: "TimeMode" "enum" "" "" 11
+        P: "TimeSpanStart" "KTime" "Time" "" 0
+        P: "TimeSpanStop" "KTime" "Time" "" 46186158000
+        P: "CustomFrameRate" "double" "Number" "" 24.000000
+Documents:
+    Count: 1
+    Document: 870221288 "Scene" "Scene"
+        Properties70:
+            P: "SourceObject" "object" "" ""
+            P: "ActiveAnimStackName" "KString" "" "" ""
+        RootNode: 0
+References:
+Definitions:
+    Version: 100
+    Count: 8
+    ObjectType: "GlobalSettings"
+        Count: 1
+    ObjectType: "NodeAttribute"
+        Count: 2
+        PropertyTemplate: "FbxCamera"
+            Properties70:
+                P: "Color" "ColorRGB" "Color" "" 0.800000 0.800000 0.800000
+                P: "Position" "Vector" "" "A" 0.000000 0.000000 -50.000000
+                P: "UpVector" "Vector" "" "A" 0.000000 1.000000 0.000000
+                P: "InterestPosition" "Vector" "" "A" 0.000000 0.000000 0.000000
+                P: "Roll" "Roll" "" "A" 0.000000
+                P: "OpticalCenterX" "OpticalCenterX" "" "A" 0.000000
+                P: "OpticalCenterY" "OpticalCenterY" "" "A" 0.000000
+                P: "BackgroundColor" "Color" "" "A" 0.630000 0.630000 0.630000
+                P: "TurnTable" "Number" "" "A" 0.000000
+                P: "DisplayTurnTableIcon" "bool" "" "" 0
+                P: "UseMotionBlur" "bool" "" "" 0
+                P: "UseRealTimeMotionBlur" "bool" "" "" 1
+                P: "Motion Blur Intensity" "Number" "" "A" 1.000000
+                P: "AspectRatioMode" "enum" "" "" 0
+                P: "AspectWidth" "double" "Number" "" 320.000000
+                P: "AspectHeight" "double" "Number" "" 200.000000
+                P: "PixelAspectRatio" "double" "Number" "" 1.000000
+                P: "FilmOffsetX" "Number" "" "A" 0.000000
+                P: "FilmOffsetY" "Number" "" "A" 0.000000
+                P: "FilmWidth" "double" "Number" "" 0.816000
+                P: "FilmHeight" "double" "Number" "" 0.612000
+                P: "FilmAspectRatio" "double" "Number" "" 1.333333
+                P: "FilmSqueezeRatio" "double" "Number" "" 1.000000
+                P: "FilmFormatIndex" "enum" "" "" 0
+                P: "PreScale" "Number" "" "A" 1.000000
+                P: "FilmTranslateX" "Number" "" "A" 0.000000
+                P: "FilmTranslateY" "Number" "" "A" 0.000000
+                P: "FilmRollPivotX" "Number" "" "A" 0.000000
+                P: "FilmRollPivotY" "Number" "" "A" 0.000000
+                P: "FilmRollValue" "Number" "" "A" 0.000000
+                P: "FilmRollOrder" "enum" "" "" 0
+                P: "ApertureMode" "enum" "" "" 2
+                P: "GateFit" "enum" "" "" 0
+                P: "FieldOfView" "FieldOfView" "" "A" 25.115000
+                P: "FieldOfViewX" "FieldOfViewX" "" "A" 40.000000
+                P: "FieldOfViewY" "FieldOfViewY" "" "A" 40.000000
+                P: "FocalLength" "Number" "" "A" 34.893276
+                P: "CameraFormat" "enum" "" "" 0
+                P: "UseFrameColor" "bool" "" "" 0
+                P: "FrameColor" "ColorRGB" "Color" "" 0.300000 0.300000 0.300000
+                P: "ShowName" "bool" "" "" 1
+                P: "ShowInfoOnMoving" "bool" "" "" 1
+                P: "ShowGrid" "bool" "" "" 1
+                P: "ShowOpticalCenter" "bool" "" "" 0
+                P: "ShowAzimut" "bool" "" "" 1
+                P: "ShowTimeCode" "bool" "" "" 0
+                P: "ShowAudio" "bool" "" "" 0
+                P: "AudioColor" "Vector3D" "Vector" "" 0.000000 1.000000 0.000000
+                P: "NearPlane" "double" "Number" "" 10.000000
+                P: "FarPlane" "double" "Number" "" 4000.000000
+                P: "AutoComputeClipPanes" "bool" "" "" 0
+                P: "ViewCameraToLookAt" "bool" "" "" 1
+                P: "ViewFrustumNearFarPlane" "bool" "" "" 0
+                P: "ViewFrustumBackPlaneMode" "enum" "" "" 2
+                P: "BackPlaneDistance" "Number" "" "A" 4000.000000
+                P: "BackPlaneDistanceMode" "enum" "" "" 1
+                P: "ViewFrustumFrontPlaneMode" "enum" "" "" 2
+                P: "FrontPlaneDistance" "Number" "" "A" 10.000000
+                P: "FrontPlaneDistanceMode" "enum" "" "" 1
+                P: "LockMode" "bool" "" "" 0
+                P: "LockInterestNavigation" "bool" "" "" 0
+                P: "FitImage" "bool" "" "" 0
+                P: "Crop" "bool" "" "" 0
+                P: "Center" "bool" "" "" 1
+                P: "KeepRatio" "bool" "" "" 1
+                P: "BackgroundAlphaTreshold" "double" "Number" "" 0.500000
+                P: "ShowBackplate" "bool" "" "" 1
+                P: "BackPlaneOffsetX" "Number" "" "A" 0.000000
+                P: "BackPlaneOffsetY" "Number" "" "A" 0.000000
+                P: "BackPlaneRotation" "Number" "" "A" 0.000000
+                P: "BackPlaneScaleX" "Number" "" "A" 1.000000
+                P: "BackPlaneScaleY" "Number" "" "A" 1.000000
+                P: "Background Texture" "object" "" ""
+                P: "FrontPlateFitImage" "bool" "" "" 1
+                P: "FrontPlateCrop" "bool" "" "" 0
+                P: "FrontPlateCenter" "bool" "" "" 1
+                P: "FrontPlateKeepRatio" "bool" "" "" 1
+                P: "Foreground Opacity" "double" "Number" "" 1.000000
+                P: "ShowFrontplate" "bool" "" "" 1
+                P: "FrontPlaneOffsetX" "Number" "" "A" 0.000000
+                P: "FrontPlaneOffsetY" "Number" "" "A" 0.000000
+                P: "FrontPlaneRotation" "Number" "" "A" 0.000000
+                P: "FrontPlaneScaleX" "Number" "" "A" 1.000000
+                P: "FrontPlaneScaleY" "Number" "" "A" 1.000000
+                P: "Foreground Texture" "object" "" ""
+                P: "DisplaySafeArea" "bool" "" "" 0
+                P: "DisplaySafeAreaOnRender" "bool" "" "" 0
+                P: "SafeAreaDisplayStyle" "enum" "" "" 1
+                P: "SafeAreaAspectRatio" "double" "Number" "" 1.333333
+                P: "Use2DMagnifierZoom" "bool" "" "" 0
+                P: "2D Magnifier Zoom" "Number" "" "A" 100.000000
+                P: "2D Magnifier X" "Number" "" "A" 50.000000
+                P: "2D Magnifier Y" "Number" "" "A" 50.000000
+                P: "CameraProjectionType" "enum" "" "" 0
+                P: "OrthoZoom" "double" "Number" "" 1.000000
+                P: "UseRealTimeDOFAndAA" "bool" "" "" 0
+                P: "UseDepthOfField" "bool" "" "" 0
+                P: "FocusSource" "enum" "" "" 0
+                P: "FocusAngle" "double" "Number" "" 3.500000
+                P: "FocusDistance" "double" "Number" "" 200.000000
+                P: "UseAntialiasing" "bool" "" "" 0
+                P: "AntialiasingIntensity" "double" "Number" "" 0.777770
+                P: "AntialiasingMethod" "enum" "" "" 0
+                P: "UseAccumulationBuffer" "bool" "" "" 0
+                P: "FrameSamplingCount" "int" "Integer" "" 7
+                P: "FrameSamplingType" "enum" "" "" 1
+    ObjectType: "Geometry"
+        Count: 1
+        PropertyTemplate: "FbxMesh"
+            Properties70:
+                P: "Color" "ColorRGB" "Color" "" 0.800000 0.800000 0.800000
+                P: "BBoxMin" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "BBoxMax" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "Primary Visibility" "bool" "" "" 1
+                P: "Casts Shadows" "bool" "" "" 1
+                P: "Receive Shadows" "bool" "" "" 1
+    ObjectType: "Model"
+        Count: 3
+        PropertyTemplate: "FbxNode"
+            Properties70:
+                P: "QuaternionInterpolate" "enum" "" "" 0
+                P: "RotationOffset" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "RotationPivot" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "ScalingOffset" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "ScalingPivot" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "TranslationActive" "bool" "" "" 0
+                P: "TranslationMin" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "TranslationMax" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "TranslationMinX" "bool" "" "" 0
+                P: "TranslationMinY" "bool" "" "" 0
+                P: "TranslationMinZ" "bool" "" "" 0
+                P: "TranslationMaxX" "bool" "" "" 0
+                P: "TranslationMaxY" "bool" "" "" 0
+                P: "TranslationMaxZ" "bool" "" "" 0
+                P: "RotationOrder" "enum" "" "" 0
+                P: "RotationSpaceForLimitOnly" "bool" "" "" 0
+                P: "RotationStiffnessX" "double" "Number" "" 0.000000
+                P: "RotationStiffnessY" "double" "Number" "" 0.000000
+                P: "RotationStiffnessZ" "double" "Number" "" 0.000000
+                P: "AxisLen" "double" "Number" "" 10.000000
+                P: "PreRotation" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "PostRotation" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "RotationActive" "bool" "" "" 0
+                P: "RotationMin" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "RotationMax" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "RotationMinX" "bool" "" "" 0
+                P: "RotationMinY" "bool" "" "" 0
+                P: "RotationMinZ" "bool" "" "" 0
+                P: "RotationMaxX" "bool" "" "" 0
+                P: "RotationMaxY" "bool" "" "" 0
+                P: "RotationMaxZ" "bool" "" "" 0
+                P: "InheritType" "enum" "" "" 0
+                P: "ScalingActive" "bool" "" "" 0
+                P: "ScalingMin" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "ScalingMax" "Vector3D" "Vector" "" 1.000000 1.000000 1.000000
+                P: "ScalingMinX" "bool" "" "" 0
+                P: "ScalingMinY" "bool" "" "" 0
+                P: "ScalingMinZ" "bool" "" "" 0
+                P: "ScalingMaxX" "bool" "" "" 0
+                P: "ScalingMaxY" "bool" "" "" 0
+                P: "ScalingMaxZ" "bool" "" "" 0
+                P: "GeometricTranslation" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "GeometricRotation" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "GeometricScaling" "Vector3D" "Vector" "" 1.000000 1.000000 1.000000
+                P: "MinDampRangeX" "double" "Number" "" 0.000000
+                P: "MinDampRangeY" "double" "Number" "" 0.000000
+                P: "MinDampRangeZ" "double" "Number" "" 0.000000
+                P: "MaxDampRangeX" "double" "Number" "" 0.000000
+                P: "MaxDampRangeY" "double" "Number" "" 0.000000
+                P: "MaxDampRangeZ" "double" "Number" "" 0.000000
+                P: "MinDampStrengthX" "double" "Number" "" 0.000000
+                P: "MinDampStrengthY" "double" "Number" "" 0.000000
+                P: "MinDampStrengthZ" "double" "Number" "" 0.000000
+                P: "MaxDampStrengthX" "double" "Number" "" 0.000000
+                P: "MaxDampStrengthY" "double" "Number" "" 0.000000
+                P: "MaxDampStrengthZ" "double" "Number" "" 0.000000
+                P: "PreferedAngleX" "double" "Number" "" 0.000000
+                P: "PreferedAngleY" "double" "Number" "" 0.000000
+                P: "PreferedAngleZ" "double" "Number" "" 0.000000
+                P: "LookAtProperty" "object" "" ""
+                P: "UpVectorProperty" "object" "" ""
+                P: "Show" "bool" "" "" 1
+                P: "NegativePercentShapeSupport" "bool" "" "" 1
+                P: "DefaultAttributeIndex" "int" "Integer" "" -1
+                P: "Freeze" "bool" "" "" 0
+                P: "LODBox" "bool" "" "" 0
+                P: "Lcl Translation" "Lcl Translation" "" "A" 0.000000 0.000000 0.000000
+                P: "Lcl Rotation" "Lcl Rotation" "" "A" 0.000000 0.000000 0.000000
+                P: "Lcl Scaling" "Lcl Scaling" "" "A" 1.000000 1.000000 1.000000
+                P: "Visibility" "Visibility" "" "A" 1.000000
+                P: "Visibility Inheritance" "Visibility Inheritance" "" "" 1
+    ObjectType: "Material"
+        Count: 1
+        PropertyTemplate: "FbxSurfacePhong"
+            Properties70:
+                P: "ShadingModel" "KString" "" "" "Phong"
+                P: "MultiLayer" "bool" "" "" 0
+                P: "EmissiveColor" "Color" "" "A" 0.000000 0.000000 0.000000
+                P: "EmissiveFactor" "Number" "" "A" 1.000000
+                P: "AmbientColor" "Color" "" "A" 0.200000 0.200000 0.200000
+                P: "AmbientFactor" "Number" "" "A" 1.000000
+                P: "DiffuseColor" "Color" "" "A" 0.800000 0.800000 0.800000
+                P: "DiffuseFactor" "Number" "" "A" 1.000000
+                P: "TransparentColor" "Color" "" "A" 0.000000 0.000000 0.000000
+                P: "TransparencyFactor" "Number" "" "A" 0.000000
+                P: "Opacity" "Number" "" "A" 1.000000
+                P: "NormalMap" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "Bump" "Vector3D" "Vector" "" 0.000000 0.000000 0.000000
+                P: "BumpFactor" "double" "Number" "" 1.000000
+                P: "DisplacementColor" "ColorRGB" "Color" "" 0.000000 0.000000 0.000000
+                P: "DisplacementFactor" "double" "Number" "" 1.000000
+                P: "VectorDisplacementColor" "ColorRGB" "Color" "" 0.000000 0.000000 0.000000
+                P: "VectorDisplacementFactor" "double" "Number" "" 1.000000
+                P: "SpecularColor" "Color" "" "A" 0.200000 0.200000 0.200000
+                P: "SpecularFactor" "Number" "" "A" 1.000000
+                P: "Shininess" "Number" "" "A" 20.000000
+                P: "ShininessExponent" "Number" "" "A" 20.000000
+                P: "ReflectionColor" "Color" "" "A" 0.000000 0.000000 0.000000
+                P: "ReflectionFactor" "Number" "" "A" 1.000000
+Objects:
+    NodeAttribute: 448203246 "Light" "Light"
+        GeometryVersion: 124
+        Properties70:
+            P: "LightType" "enum" "" "" 0
+            P: "CastLight" "bool" "" "" 1
+            P: "Color" "Color" "" "A" 1.000000 1.000000 1.000000
+            P: "Intensity" "Number" "" "A" 100000.000000
+            P: "DecayType" "enum" "" "" 2
+            P: "DecayStart" "double" "Number" "" 2999.998283
+            P: "CastShadows" "bool" "" "" 1
+            P: "ShadowColor" "Color" "" "A" 0.000000 0.000000 0.000000
+            P: "AreaLightShape" "enum" "" "" 0
+    NodeAttribute: 684797629 "Camera" "Camera"
+        Properties70:
+            P: "Position" "Vector" "" "A" 735.889160 495.830933 692.579102
+            P: "UpVector" "Vector" "" "A" -0.324013 0.895396 -0.305421
+            P: "InterestPosition" "Vector" "" "A" 735.203247 495.830933 693.306763
+            P: "BackgroundColor" "Color" "" "A" 0.000000 0.000000 0.000000
+            P: "DisplayTurnTableIcon" "bool" "" "" 1
+            P: "AspectRatioMode" "enum" "" "" 2
+            P: "AspectWidth" "double" "Number" "" 1920.000000
+            P: "AspectHeight" "double" "Number" "" 1080.000000
+            P: "FilmWidth" "double" "Number" "" 1.417323
+            P: "FilmHeight" "double" "Number" "" 0.944882
+            P: "FilmAspectRatio" "double" "Number" "" 1.500000
+            P: "FilmOffsetX" "double" "Number" "A" 0.000000
+            P: "FilmOffsetY" "double" "Number" "A" 0.000000
+            P: "ApertureMode" "enum" "" "" 3
+            P: "GateFit" "enum" "" "" 2
+            P: "FieldOfView" "FieldOfView" "" "A" 39.597755
+            P: "FieldOfViewX" "FieldOfViewX" "" "A" 39.597755
+            P: "FieldOfViewY" "FieldOfViewY" "" "A" 26.991466
+            P: "FocalLength" "double" "Number" "A" 50.000000
+            P: "SafeAreaAspectRatio" "double" "Number" "" 1.777778
+            P: "OrthoZoom" "double" "Number" "" 7.314286
+            P: "NearPlane" "double" "Number" "" 10.000000
+            P: "FarPlane" "double" "Number" "" 10000.000000
+            P: "BackPlaneDistance" "double" "Number" "A" 10000.000000
+        TypeFlags: "Camera"
+        GeometryVersion: 124
+        Position: 735.889160 495.830933 692.579102
+        Up: -0.324013 0.895396 -0.305421
+        LookAt: -0.685921 0.000000 0.727677
+        ShowInfoOnMoving: 1
+        ShowAudio: 0
+        AudioColor: 0.000000 1.000000 0.000000
+        CameraOrthoZoom: 1.000000
+    Geometry: 792710708 "Cube" "Mesh"
+        Properties70:
+        GeometryVersion: 124
+        Vertices: [f64 x 24]
+        PolygonVertexIndex: [s32 x 24]
+        Edges: [s32 x 12]
+        LayerElementNormal: 0
+            Version: 101
+            Name: ""
+            MappingInformationType: "ByPolygonVertex"
+            ReferenceInformationType: "Direct"
+            Normals: [f64 x 72]
+        LayerElementUV: 0
+            Version: 101
+            Name: "UVMap"
+            MappingInformationType: "ByPolygonVertex"
+            ReferenceInformationType: "IndexToDirect"
+            UV: [f64 x 40]
+            UVIndex: [s32 x 24]
+        LayerElementMaterial: 0
+            Version: 101
+            Name: ""
+            MappingInformationType: "AllSame"
+            ReferenceInformationType: "IndexToDirect"
+            Materials: [s32 x 1]
+        Layer: 0
+            Version: 100
+            LayerElement:
+                Type: "LayerElementNormal"
+                TypedIndex: 0
+            LayerElement:
+                Type: "LayerElementUV"
+                TypedIndex: 0
+            LayerElement:
+                Type: "LayerElementMaterial"
+                TypedIndex: 0
+    Model: 873356741 "Cube" "Mesh"
+        Version: 232
+        Properties70:
+            P: "Lcl Rotation" "Lcl Rotation" "" "A" -90.000009 0.000000 0.000000
+            P: "Lcl Scaling" "Lcl Scaling" "" "A" 100.000000 100.000000 100.000000
+            P: "DefaultAttributeIndex" "int" "Integer" "" 0
+            P: "InheritType" "enum" "" "" 1
+        MultiLayer: 0
+        MultiTake: 0
+        Shading: true
+        Culling: "CullingOff"
+    Model: 114265625 "Light" "Light"
+        Version: 232
+        Properties70:
+            P: "Lcl Translation" "Lcl Translation" "" "A" 407.624542 590.386230 -100.545395
+            P: "Lcl Rotation" "Lcl Rotation" "" "A" 47.533564 107.220767 10.743661
+            P: "Lcl Scaling" "Lcl Scaling" "" "A" 100.000008 100.000000 100.000000
+            P: "DefaultAttributeIndex" "int" "Integer" "" 0
+            P: "InheritType" "enum" "" "" 1
+        MultiLayer: 0
+        MultiTake: 0
+        Shading: true
+        Culling: "CullingOff"
+    Model: 101990769 "Camera" "Camera"
+        Version: 232
+        Properties70:
+            P: "Lcl Translation" "Lcl Translation" "" "A" 735.889160 495.830933 692.579102
+            P: "Lcl Rotation" "Lcl Rotation" "" "A" 22.768803 142.108342 34.348485
+            P: "Lcl Scaling" "Lcl Scaling" "" "A" 100.000000 100.000008 99.999992
+            P: "DefaultAttributeIndex" "int" "Integer" "" 0
+            P: "InheritType" "enum" "" "" 1
+            P: "ResolutionMode" "enum" "" "" 0
+            P: "AspectW" "double" "Number" "" 1920.000000
+            P: "AspectH" "double" "Number" "" 1080.000000
+            P: "ViewFrustum" "bool" "" "" 1
+            P: "BackgroundMode" "enum" "" "" 0
+            P: "ForegroundTransparent" "bool" "" "" 1
+        MultiLayer: 0
+        MultiTake: 0
+        Shading: true
+        Culling: "CullingOff"
+    Material: 757845981 "Material" ""
+        Version: 102
+        ShadingModel: "Phong"
+        MultiLayer: 0
+        Properties70:
+            P: "DiffuseColor" "Color" "" "A" 0.800000 0.800000 0.800000
+            P: "EmissiveColor" "Color" "" "A" 0.800000 0.800000 0.800000
+            P: "EmissiveFactor" "Number" "" "A" 0.000000
+            P: "AmbientColor" "Color" "" "A" 0.050876 0.050876 0.050876
+            P: "AmbientFactor" "Number" "" "A" 0.000000
+            P: "SpecularColor" "Color" "" "A" 0.800000 0.800000 0.800000
+            P: "SpecularFactor" "Number" "" "A" 0.250000
+            P: "Shininess" "Number" "" "A" 35.999999
+            P: "ShininessExponent" "Number" "" "A" 35.999999
+            P: "ReflectionColor" "Color" "" "A" 0.800000 0.800000 0.800000
+            P: "ReflectionFactor" "Number" "" "A" 0.000000
+Connections:
+    C: "OO" 873356741 0
+    C: "OO" 114265625 0
+    C: "OO" 101990769 0
+    C: "OO" 792710708 873356741
+    C: "OO" 448203246 114265625
+    C: "OO" 684797629 101990769
+    C: "OO" 757845981 873356741
+Takes:
+    Current: ""
