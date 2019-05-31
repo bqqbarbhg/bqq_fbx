@@ -16,6 +16,7 @@ static void indent(int amount)
 
 int main(int argc, char **argv)
 {
+	int level = 0;
 	bqq_fbx_error error;
 	bfbx_ctx ctx, *bc = &ctx;
 
@@ -24,7 +25,7 @@ int main(int argc, char **argv)
 	error.byte_offset = 0;
 	error.description[0] = '\0';
 
-	ctx.data = bfbx_read_file("default.fbx", &ctx.size, &error);
+	ctx.data = (const char*)bfbx_read_file("default.fbx", &ctx.size, &error);
 	if (!ctx.data) goto error;
 
 	ctx.pos = 0;
@@ -37,7 +38,6 @@ int main(int argc, char **argv)
 	uint32_t end_offset_stack[128];
 	end_offset_stack[0] = ctx.size;
 
-	int level = 0;
 	while (level >= 0) {
 		uint32_t start = bc->pos;
 
