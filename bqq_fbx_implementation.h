@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 // Minimum allocation size in bytes
 #ifndef BFBX_MIN_ALLOCATION_SIZE
@@ -110,6 +111,12 @@ typedef struct {
 	uint32_t size;           // < Size in bytes
 } bfbx_object_type;
 
+// Map from object ID to object pointers
+typedef struct {
+	uint32_t size;      // < Size of `map` in elements
+	bqq_fbx_base **map; // < Mapping from `bfbx_object_hash()` to pointer
+} bfbx_object_map;
+
 // -- File context
 // This is the main context structure passed to every function
 
@@ -130,13 +137,13 @@ struct bfbx_ctx_s {
 	bfbx_arena result_arena; // < Output allocations, freed when user is done
 
 	// Scene contents
+	bqq_fbx_scene *scene;
 	bfbx_append_list all_objects;
+	bfbx_object_map object_map;
 
 	// Type-specific properties
 	bfbx_object_type object_types[bqq_fbx_num_types];
 };
-
-#define bfbx_append(bc, list, type) (type*)bfbx_append_size((bc), (list), sizeof(type))
 
 // -- File parse result data types.
 // The data structures contain pointers to the file buffer memory.
@@ -408,6 +415,40 @@ static void *bfbx_append_size(bfbx_ctx *bc, bfbx_append_list *list, uint32_t siz
 		}
 		return new_chunk + 1;
 	}
+}
+
+#define bfbx_append(bc, list, type) (type*)bfbx_append_size((bc), (list), sizeof(type))
+
+static uint32_t bfbx_object_hash(uint64_t id)
+{
+	// TODO: Something better?
+	uint64_t lo = (id & UINT64_C(0xffffffff)) * UINT64_C(2654435761);
+	uint64_t hi = (id >> 32) * UINT64_C(2654435761);
+	return (uint32_t)((lo + hi) >> 32);
+}
+
+static void bfbx_object_insert(bfbx_object_map *map, bqq_fbx_base *object)
+{
+	uint32_t mask = map->size - 1;
+	uint32_t index = bfbx_object_hash(object->id) & mask;
+	while (map->map[index] != NULL) {
+		index = (index + 1) & mask;
+	}
+	map->map[index] = object;
+}
+
+static bqq_fbx_base *bfbx_object_find(const bfbx_object_map *map, uint64_t id)
+{
+	uint32_t mask = map->size - 1;
+	uint32_t index = bfbx_object_hash(id) & mask;
+	while (map->map[index] != NULL) {
+		bqq_fbx_base *object = map->map[index];
+		if (object->id == id) {
+			return object;
+		}
+		index = (index + 1) & mask;
+	}
+	return NULL;
 }
 
 // -- Binary parsing
@@ -930,7 +971,6 @@ static int bfbx_doc_definition(bfbx_ctx *bc, bfbx_fnode *def_node)
 	} else {
 		// Ignore unknown definitions
 		bc->pos = def_node->end_offset;
-		return 1;
 	}
 
 	return 1;
@@ -1024,6 +1064,56 @@ static int bfbx_doc_section_objects(bfbx_ctx *bc, bfbx_fnode *section)
 	return 1;
 }
 
+static int bfbx_doc_connection(bfbx_ctx *bc, bfbx_fnode *node)
+{
+	if (node->prop_count != 3) {
+		bfbx_error(bc, "Unexpected amount of properties for Connection");
+		return 0;
+	}
+
+	bfbx_fstring type;
+	if (!bfbx_parse_to_string(bc, &type)) return 0;
+	if (bfbx_streq(&type, "OO")) {
+		uint64_t child_id, parent_id;
+		if (!bfbx_parse_to_u64(bc, &child_id)) return 0;
+		if (!bfbx_parse_to_u64(bc, &parent_id)) return 0;
+
+		bqq_fbx_base *child = bfbx_object_find(&bc->object_map, child_id);
+		if (!child) {
+			bfbx_error(bc, "Invalid child ID %" PRIu64, child_id);
+			return 0;
+		}
+
+		bqq_fbx_base *parent = &bc->scene->root.base;
+		if (parent_id != 0) {
+			parent = bfbx_object_find(&bc->object_map, parent_id);
+			if (!parent) {
+				bfbx_error(bc, "Invalid parent ID %" PRIu64, parent_id);
+				return 0;
+			}
+		}
+		parent->num_children++;
+		child->parent = parent;
+
+	} else {
+		// Ignore unknown connection types
+		bc->pos = node->end_offset;
+	}
+
+	return 1;
+}
+
+static int bfbx_doc_section_connections(bfbx_ctx *bc, bfbx_fnode *section)
+{
+	bfbx_fnode obj_node;
+	while (bfbx_parse_child(bc, section, &obj_node)) {
+		if (bc->failed) return 0;
+		if (!bfbx_doc_connection(bc, &obj_node)) return 0;
+	}
+
+	return 1;
+}
+
 static int bfbx_doc_root(bfbx_ctx *bc)
 {
 	uint32_t begin_pos = bc->pos;
@@ -1077,6 +1167,30 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 		}
 	}
 
+	// Copy all objects and insert to map
+	{
+		uint32_t num = bc->all_objects.count;
+		bqq_fbx_base **dst = (bqq_fbx_base**)bfbx_alloc_result(bc, num * sizeof(bqq_fbx_base**));
+		if (!dst) return 0;
+		bc->scene->num_objects = num;
+		bc->scene->objects = dst;
+
+		uint32_t map_size = bfbx_to_pow2(num * 3);
+		bc->object_map.size = map_size;
+		bc->object_map.map = (bqq_fbx_base**)bfbx_alloc_temp(bc, map_size * sizeof(bqq_fbx_base**));
+		memset(bc->object_map.map, 0, map_size * sizeof(bqq_fbx_base**));
+		uint32_t map_mask = map_size - 1;
+
+		for (bfbx_append_chunk *chunk = bc->all_objects.first; chunk; chunk = chunk->next) {
+			bqq_fbx_base **src = (bqq_fbx_base**)(chunk + 1);
+			for (uint32_t i = 0; i < chunk->count; i++) {
+				bqq_fbx_base *object = src[i];
+				*dst++ = object;
+				bfbx_object_insert(&bc->object_map, object);
+			}
+		}
+	}
+
 	// 3. Connections
 	for (int attempt = 0; ; attempt++) {
 		int found = 0;
@@ -1084,6 +1198,7 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 			if (section.end_offset == 0) break;
 			if (bc->failed) return 0;
 			if (bfbx_streq(&section.name, "Connections")) {
+				if (!bfbx_doc_section_connections(bc, &section)) return 0;
 				found = 1;
 				break;
 			} else {
@@ -1096,6 +1211,27 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 		if (attempt > 0) {
 			bfbx_error(bc, "No 'Connections' section");
 			return 0;
+		}
+	}
+
+	// Resolve child pointers
+	{
+		// NOTE: Temporarily reset `num_children`, incremeted when appending them back
+		for (uint32_t i = 0; i < bc->scene->num_objects; i++) {
+			bqq_fbx_base *parent = bc->scene->objects[i];
+			uint32_t num = parent->num_children;
+			if (num > 0) {
+				parent->num_children = 0;
+				parent->children = (bqq_fbx_base**)bfbx_alloc_result(bc, num * sizeof(bqq_fbx_base*));
+			}
+		}
+
+		for (uint32_t i = 0; i < bc->scene->num_objects; i++) {
+			bqq_fbx_base *child = bc->scene->objects[i];
+			if (child->parent) {
+				uint32_t index = child->parent->num_children++;
+				child->parent->children[index] = child;
+			}
 		}
 	}
 
@@ -1142,24 +1278,18 @@ bqq_fbx_scene *bqq_fbx_parse_memory(const void *data, size_t size, bqq_fbx_error
 	if (!internal_scene) goto error;
 	scene = &internal_scene->scene;
 	memset(internal_scene, 0, sizeof(bfbx_scene));
+	bc->scene = scene;
+
+	// Append root pointer
+	{
+		bqq_fbx_base **ptr = bfbx_append(bc, &bc->all_objects, bqq_fbx_base*);
+		if (!ptr) return 0;
+		*ptr = &scene->root.base;
+	}
 
 	if (!bfbx_init_object_types(bc)) goto error;
 	if (!bfbx_parse_header(bc)) goto error;
 	if (!bfbx_doc_root(bc)) goto error;
-
-	// Copy all objects
-	{
-		uint32_t num = bc->all_objects.count;
-		bqq_fbx_base **dst = (bqq_fbx_base**)bfbx_alloc_result(bc, num * sizeof(bqq_fbx_base**));
-		scene->num_objects = num;
-		scene->objects = dst;
-		for (bfbx_append_chunk *chunk = bc->all_objects.first; chunk; chunk = chunk->next) {
-			bqq_fbx_base **src = (bqq_fbx_base**)(chunk + 1);
-			for (uint32_t i = 0; i < chunk->count; i++) {
-				*dst++ = src[i];
-			}
-		}
-	}
 
 	bfbx_free_chunk(bc->temp_arena.chunk);
 	internal_scene->result_allocation = bc->result_arena.chunk;
