@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BQQ_FBX_INCLUDED
+#define BQQ_FBX_INCLUDED
 
 #include <stddef.h>
 #include <stdint.h>
@@ -118,3 +119,5 @@ typedef struct {
 bqq_fbx_scene *bqq_fbx_parse_file(const char *filename, bqq_fbx_error *error);
 bqq_fbx_scene *bqq_fbx_parse_memory(const void *data, size_t size, bqq_fbx_error *error);
 void bqq_fbx_free(bqq_fbx_scene *scene);
+
+#endif
