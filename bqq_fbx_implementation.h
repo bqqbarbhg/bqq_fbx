@@ -351,14 +351,14 @@ static void *bfbx_alloc_result(bfbx_ctx *bc, uint32_t size) {
 	return ptr;
 }
 
-#define bfbx_push_temp(bc, type) (type*)bfbx_alloc_temp((bc), sizeof(type))
-#define bfbx_push_result(bc, type) (type*)bfbx_alloc_result((bc), sizeof(type))
+#define bfbx_push_temp(type, bc, num) (type*)bfbx_alloc_temp((bc), (num) * sizeof(type))
+#define bfbx_push_result(type, bc, num) (type*)bfbx_alloc_result((bc), (num) * sizeof(type))
 
 static const char *bfbx_result_string(bfbx_ctx *bc, const bfbx_fstring *string)
 {
 	if (string->length == 0) return "";
 
-	char *copy = (char*)bfbx_alloc_result(bc, string->length + 1);
+	char *copy = bfbx_push_result(char, bc, string->length + 1);
 	if (copy) {
 		memcpy(copy, string->data, string->length);
 		copy[string->length] = '\0';
@@ -1092,7 +1092,34 @@ static int bfbx_doc_connection(bfbx_ctx *bc, bfbx_fnode *node)
 				return 0;
 			}
 		}
+
 		parent->num_children++;
+		if (parent->type = bqq_fbx_type_node) {
+			bqq_fbx_node *parent_node = (bqq_fbx_node*)parent;
+			switch (child->type) {
+			case bqq_fbx_type_node:
+				parent_node->num_nodes++;
+				((bqq_fbx_node*)child)->parent = parent_node;
+				break;
+			case bqq_fbx_type_mesh:
+				parent_node->num_meshes++;
+				((bqq_fbx_mesh*)child)->parent = parent_node;
+				break;
+			case bqq_fbx_type_material:
+				parent_node->num_materials++;
+				((bqq_fbx_material*)child)->parent = parent_node;
+				break;
+			case bqq_fbx_type_light:
+				parent_node->num_lights++;
+				((bqq_fbx_light*)child)->parent = parent_node;
+				break;
+			case bqq_fbx_type_camera:
+				parent_node->num_cameras++;
+				((bqq_fbx_camera*)child)->parent = parent_node;
+				break;
+			}
+		}
+
 		child->parent = parent;
 
 	} else {
@@ -1170,14 +1197,14 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 	// Copy all objects and insert to map
 	{
 		uint32_t num = bc->all_objects.count;
-		bqq_fbx_base **dst = (bqq_fbx_base**)bfbx_alloc_result(bc, num * sizeof(bqq_fbx_base**));
+		bqq_fbx_base **dst = bfbx_push_result(bqq_fbx_base*, bc, num);
 		if (!dst) return 0;
 		bc->scene->num_objects = num;
 		bc->scene->objects = dst;
 
 		uint32_t map_size = bfbx_to_pow2(num * 3);
 		bc->object_map.size = map_size;
-		bc->object_map.map = (bqq_fbx_base**)bfbx_alloc_temp(bc, map_size * sizeof(bqq_fbx_base**));
+		bc->object_map.map = bfbx_push_temp(bqq_fbx_base*, bc, map_size);
 		memset(bc->object_map.map, 0, map_size * sizeof(bqq_fbx_base**));
 		uint32_t map_mask = map_size - 1;
 
@@ -1214,23 +1241,66 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 		}
 	}
 
-	// Resolve child pointers
-	{
-		// NOTE: Temporarily reset `num_children`, incremeted when appending them back
-		for (uint32_t i = 0; i < bc->scene->num_objects; i++) {
-			bqq_fbx_base *parent = bc->scene->objects[i];
-			uint32_t num = parent->num_children;
-			if (num > 0) {
-				parent->num_children = 0;
-				parent->children = (bqq_fbx_base**)bfbx_alloc_result(bc, num * sizeof(bqq_fbx_base*));
-			}
+	// Resolve child pointers, allocate child arrays and reet counts
+	for (uint32_t i = 0; i < bc->scene->num_objects; i++) {
+		bqq_fbx_base *parent = bc->scene->objects[i];
+		if (parent->num_children > 0) {
+			parent->children = bfbx_push_result(bqq_fbx_base*, bc, parent->num_children);
+			parent->num_children = 0;
 		}
 
-		for (uint32_t i = 0; i < bc->scene->num_objects; i++) {
-			bqq_fbx_base *child = bc->scene->objects[i];
-			if (child->parent) {
-				uint32_t index = child->parent->num_children++;
-				child->parent->children[index] = child;
+		if (parent->type == bqq_fbx_type_node) {
+			bqq_fbx_node *node = (bqq_fbx_node*)parent;
+			if (node->num_nodes > 0) {
+				node->nodes = bfbx_push_result(bqq_fbx_node*, bc, node->num_nodes);
+				node->num_nodes = 0;
+			}
+			if (node->num_meshes > 0) {
+				node->meshes = bfbx_push_result(bqq_fbx_mesh*, bc, node->num_meshes);
+				node->num_meshes = 0;
+			}
+			if (node->num_materials > 0) {
+				node->materials = bfbx_push_result(bqq_fbx_material*, bc, node->num_materials);
+				node->num_materials = 0;
+			}
+			if (node->num_lights > 0) {
+				node->lights = bfbx_push_result(bqq_fbx_light*, bc, node->num_lights);
+				node->num_lights = 0;
+			}
+			if (node->num_cameras > 0) {
+				node->cameras = bfbx_push_result(bqq_fbx_camera*, bc, node->num_cameras);
+				node->num_cameras = 0;
+			}
+		}
+	}
+
+	// Add to parent arrays and increment counts back
+	for (uint32_t i = 0; i < bc->scene->num_objects; i++) {
+		bqq_fbx_base *child = bc->scene->objects[i];
+		bqq_fbx_base *parent = child->parent;
+		if (!parent) continue;
+
+		uint32_t index = parent->num_children++;
+		parent->children[index] = child;
+
+		if (parent->type == bqq_fbx_type_node) {
+			bqq_fbx_node *node = (bqq_fbx_node*)parent;
+			switch (child->type) {
+			case bqq_fbx_type_node:
+				node->nodes[node->num_nodes++] = (bqq_fbx_node*)child;
+				break;
+			case bqq_fbx_type_mesh:
+				node->meshes[node->num_meshes++] = (bqq_fbx_mesh*)child;
+				break;
+			case bqq_fbx_type_material:
+				node->materials[node->num_materials++] = (bqq_fbx_material*)child;
+				break;
+			case bqq_fbx_type_light:
+				node->lights[node->num_lights++] = (bqq_fbx_light*)child;
+				break;
+			case bqq_fbx_type_camera:
+				node->cameras[node->num_cameras++] = (bqq_fbx_camera*)child;
+				break;
 			}
 		}
 	}
@@ -1280,8 +1350,10 @@ bqq_fbx_scene *bqq_fbx_parse_memory(const void *data, size_t size, bqq_fbx_error
 	memset(internal_scene, 0, sizeof(bfbx_scene));
 	bc->scene = scene;
 
-	// Append root pointer
+	// Setup root
 	{
+		scene->root.base.name = "";
+
 		bqq_fbx_base **ptr = bfbx_append(bc, &bc->all_objects, bqq_fbx_base*);
 		if (!ptr) return 0;
 		*ptr = &scene->root.base;

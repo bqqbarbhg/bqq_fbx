@@ -108,7 +108,6 @@ struct bqq_fbx_material_s {
 };
 
 typedef struct {
-	const char *name;
 	bqq_fbx_node root;
 
 	uint32_t num_objects;
