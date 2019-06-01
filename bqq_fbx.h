@@ -29,6 +29,20 @@ typedef struct bqq_fbx_material_s bqq_fbx_material;
 typedef struct bqq_fbx_light_s bqq_fbx_light;
 typedef struct bqq_fbx_camera_s bqq_fbx_camera;
 
+typedef union {
+	struct {
+		double x, y;
+	};
+	double v[2];
+} bqq_fbx_vec2;
+
+typedef union {
+	struct {
+		double x, y, z;
+	};
+	double v[3];
+} bqq_fbx_vec3;
+
 struct bqq_fbx_base_s {
 	uint64_t id;
 	const char *name;
@@ -48,18 +62,18 @@ struct bqq_fbx_unknown_s {
 struct bqq_fbx_node_s {
 	bqq_fbx_base base; 
 
-	double local_translation[3]; // < Translation relative to parent node
-	double local_rotation[3];    // < Euler angle rotation relative to parent node
-	double local_scaling[3];     // < Scaling relative to parent node
+	bqq_fbx_vec3 local_translation;
+	bqq_fbx_vec3 local_rotation;
+	bqq_fbx_vec3 local_scaling;
 
-	double rotation_offset[3];   // < TODOC
-	double rotation_pivot[3];    // < TODOC
-	double scaling_offset[3];    // < TODOC
-	double scaling_pivot[3];     // < TODOC
+	bqq_fbx_vec3 rotation_offset;
+	bqq_fbx_vec3 rotation_pivot;
+	bqq_fbx_vec3 scaling_offset;
+	bqq_fbx_vec3 scaling_pivot;
 
-	double geometric_translation[3]; // < TODOC
-	double geometric_rotation[3];    // < TODOC
-	double geometric_scaling[3];     // < TODOC
+	bqq_fbx_vec3 geometric_translation;
+	bqq_fbx_vec3 geometric_rotation;
+	bqq_fbx_vec3 geometric_scaling;
 
 	bqq_fbx_node *parent;
 
@@ -80,10 +94,40 @@ struct bqq_fbx_node_s {
 
 };
 
+typedef struct {
+	uint32_t num_vertices;
+	uint32_t *vertices;
+} bqq_fbx_face;
+
+typedef struct {
+	uint32_t vertex[2];
+} bqq_fbx_edge;
+
+typedef struct {
+	const char *name;
+	bqq_fbx_vec2 *vertex_uvs;
+} bqq_fbx_uv_map;
+
 struct bqq_fbx_mesh_s {
 	bqq_fbx_base base; 
 	bqq_fbx_node *parent;
 
+	// Per-face data
+	uint32_t num_faces;
+	bqq_fbx_face *faces;
+	bqq_fbx_vec3 *face_normals;
+
+	// Per-edge data
+	uint32_t num_edges;
+	bqq_fbx_edge *edges;
+
+	// Per-vertex data
+	uint32_t num_vertices;
+	uint32_t num_uv_maps;
+	bqq_fbx_vec3 *vertex_positions;
+	bqq_fbx_vec3 *vertex_normals;
+	uint32_t *vertex_materials;
+	bqq_fbx_uv_map *uv_maps;
 };
 
 struct bqq_fbx_light_s {
@@ -112,6 +156,21 @@ typedef struct {
 
 	uint32_t num_objects;
 	bqq_fbx_base **objects;
+
+	uint32_t num_nodes;
+	bqq_fbx_node **nodes;
+
+	uint32_t num_meshes;
+	bqq_fbx_mesh **meshes;
+
+	uint32_t num_materials;
+	bqq_fbx_material **materials;
+
+	uint32_t num_lights;
+	bqq_fbx_light **lights;
+
+	uint32_t num_cameras;
+	bqq_fbx_camera **cameras;
 
 } bqq_fbx_scene;
 

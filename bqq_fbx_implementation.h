@@ -13,7 +13,12 @@
 
 // Minimum allocation size in bytes
 #ifndef BFBX_MIN_ALLOCATION_SIZE
-#define BFBX_MIN_ALLOCATION_SIZE 0x10000
+#define BFBX_MIN_ALLOCATION_SIZE 0x10000 // 10KiB
+#endif
+
+// Huge allocation size in bytes
+#ifndef BFBX_HUGE_ALLOCATION_SIZE
+#define BFBX_HUGE_ALLOCATION_SIZE 0x1000000 // 1MiB
 #endif
 
 
@@ -48,6 +53,22 @@ static void *bfbx_alloc(bfbx_arena *arena, uint32_t size)
 	}
 
 	size = (size + 7) & ~7; // Align all allocations to 8 bytes
+
+	if (size >= BFBX_HUGE_ALLOCATION_SIZE) {
+		char *chunk = (char*)malloc(size + 8);
+		if (!chunk) return NULL;
+		if (arena->chunk) {
+			// Previous allocations, link between current and previous chunks
+			*(void**)chunk = *(void**)arena->chunk;
+			*(void**)arena->chunk = chunk;
+		} else {
+			// First allocation, set as empty root chunk
+			*(void**)chunk = NULL;
+			arena->chunk = chunk;
+		}
+		return chunk + 8;
+	}
+
 	if (arena->pos + size <= arena->size) {
 		uint32_t pos = arena->pos;
 		arena->pos = pos + size;
@@ -57,9 +78,7 @@ static void *bfbx_alloc(bfbx_arena *arena, uint32_t size)
 		if (next_size < BFBX_MIN_ALLOCATION_SIZE) next_size = BFBX_MIN_ALLOCATION_SIZE;
 		if (next_size < size + 8) next_size = size + 8;
 		char *chunk = (char*)malloc(next_size);
-		if (!chunk) {
-			return NULL;
-		}
+		if (!chunk) return NULL;
 		*(void**)chunk = arena->chunk;
 		arena->chunk = chunk;
 		arena->pos = 8 + size;
@@ -133,8 +152,10 @@ struct bfbx_ctx_s {
 	bqq_fbx_error *error; // < Pointer to an user supplied error struct
 
 	// Memory allocation
-	bfbx_arena temp_arena;   // < Temporary allocations, thrown away when done
-	bfbx_arena result_arena; // < Output allocations, freed when user is done
+	bfbx_arena temp_arena;     // < Temporary allocations, thrown away when done
+	bfbx_arena result_arena;   // < Output allocations, freed when user is done
+	void *decompress_buffer;   // < Temporary buffer for decompression
+	uint32_t decompress_bytes; // < Size of `decompress_buffer` in bytes
 
 	// Scene contents
 	bqq_fbx_scene *scene;
@@ -200,11 +221,398 @@ typedef struct {
 	} value;
 } bfbx_fprop;
 
+// -- Deflate implementation
+// Pretty much based on Sean Barrett's `stb_image` deflate
+
+// Lookup data.
+static const uint16_t bfbxz_length_base[] = {
+	3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,
+	43,51,59,67,83,99,115,131,163,195,227,258,0,0, };
+static const uint8_t bfbxz_length_bits[] = {
+	0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0,0,0, };
+static const uint16_t bfbxz_dist_base[] = {
+	1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,
+	2049,3073,4097,6145,8193,12289,16385,24577,0,0, };
+static const uint8_t bfbxz_dist_bits[] = {
+	0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13, };
+static const uint8_t bfbxz_code_length_swizzle[] = {
+	16,17,18,0,8,7,9,6,10,5,11,4,123,13,2,14,1,15 };
+
+#define BFBXZ_HUFF_MAX_BITS 16
+#define BFBXZ_HUFF_MAX_VALUE 288
+#define BFBXZ_HUFF_FAST_BITS 9
+#define BFBXZ_HUFF_FAST_SIZE (1 << BFBXZ_HUFF_FAST_BITS)
+
+typedef struct {
+	uint32_t num_symbols;
+
+	uint16_t sorted_to_sym[BFBXZ_HUFF_MAX_VALUE]; // < Sorted symbol index to symbol
+	uint16_t past_max_code[BFBXZ_HUFF_MAX_BITS];  // < One past maximum code value per bit length
+	int16_t code_to_sorted[BFBXZ_HUFF_MAX_BITS];  // < Code to sorted symbol index per bit length
+	uint16_t fast_sym[BFBXZ_HUFF_FAST_SIZE];      // < Fast symbol lookup [0:12] symbol [12:16] bits
+} bfbxz_huff_tree;
+
+typedef struct {
+	const char *data;
+	uint32_t pos;
+	uint32_t size;
+
+	uint32_t num_bits;
+	uint32_t bits;
+} bfbxz_stream;
+
+typedef struct {
+	bfbxz_stream stream;
+	bfbxz_huff_tree huff_lit_length;
+	bfbxz_huff_tree huff_dist;
+
+	char *output;
+	uint32_t output_pos;
+	uint32_t output_size;
+
+} bfbxz_context;
+
+static void bfbxz_refill(bfbxz_stream *stream)
+{
+	while (stream->num_bits <= 24 && stream->pos < stream->size) {
+		stream->bits |= (uint8_t)stream->data[stream->pos++] << stream->num_bits;
+		stream->num_bits += 8;
+	}
+	if (stream->pos >= stream->size)
+		stream->num_bits = 32;
+}
+
+static int bfbxz_huff_build(bfbxz_huff_tree *tree, uint8_t *sym_bits, uint32_t sym_count)
+{
+	if (sym_count > BFBXZ_HUFF_MAX_VALUE) return 0;
+	tree->num_symbols = sym_count;
+
+	uint32_t bits_counts[BFBXZ_HUFF_MAX_BITS];
+	memset(bits_counts, 0, sizeof(bits_counts));
+	for (uint32_t i = 0; i < sym_count; i++) {
+		uint32_t bits = sym_bits[i];
+		if (bits == 0 || bits > BFBXZ_HUFF_MAX_BITS) return 0; 
+		bits_counts[bits]++;
+	}
+
+	uint32_t total_syms[BFBXZ_HUFF_MAX_BITS];
+	uint32_t first_code[BFBXZ_HUFF_MAX_BITS];
+
+	tree->code_to_sorted[0] = INT16_MAX;
+	tree->past_max_code[0] = 0;
+	total_syms[0] = 0;
+
+	uint32_t code = 0;
+	uint32_t prev_count = 0;
+	for (uint32_t bits = 1; bits < BFBXZ_HUFF_MAX_BITS; bits++) {
+		uint32_t count = bits_counts[bits];
+		code = (code + prev_count) << 1;
+		if (code > UINT16_MAX) return 0;
+		first_code[bits] = code;
+		tree->past_max_code[bits] = (uint16_t)(code + count);
+		if (tree->past_max_code[bits] > 1 << bits) return 0;
+
+		uint32_t prev_syms = total_syms[bits - 1];
+		total_syms[bits] = prev_syms + count;
+
+		if (count > 0) {
+			tree->code_to_sorted[bits] = (int16_t)((int)prev_syms - (int)code);
+		} else {
+			tree->code_to_sorted[bits] = INT16_MAX;
+		}
+		prev_count = count;
+	}
+
+	memset(tree->fast_sym, 0, sizeof(tree->fast_sym));
+
+	uint32_t bits_index[BFBXZ_HUFF_MAX_BITS];
+	memset(bits_index, 0, sizeof(bits_index));
+	memset(tree->sorted_to_sym, 0xff, sizeof(tree->sorted_to_sym));
+	for (uint32_t i = 0; i < sym_count; i++) {
+		uint32_t bits = sym_bits[i];
+		uint32_t index = bits_index[bits]++;
+		uint32_t sorted = total_syms[bits - 1] + index;
+		tree->sorted_to_sym[sorted] = i;
+
+		uint32_t code = first_code[bits] + index;
+		uint32_t rev_code = 0;
+		for (uint32_t bit = 0; bit < bits; bit++) {
+			if (code & (1 << bit)) rev_code |= 1 << (bits - bit - 1);
+		}
+
+		uint16_t fast_sym = i | bits << 12;
+		uint32_t hi_max = 1 << (BFBXZ_HUFF_FAST_BITS - bits);
+		for (uint32_t hi = 0; hi < hi_max; hi++) {
+			tree->fast_sym[rev_code | hi << bits] = fast_sym;
+		}
+	}
+
+	return 1;
+}
+
+static uint32_t bfbxz_huff_decode(const bfbxz_huff_tree *tree, bfbxz_stream *stream)
+{
+	uint32_t fast_sym_bits = tree->fast_sym[stream->bits & ((1 << BFBXZ_HUFF_FAST_BITS) - 1)];
+	if (fast_sym_bits != 0) {
+		uint32_t bits = fast_sym_bits >> 12;
+		stream->bits >>= bits;
+		stream->num_bits -= bits;
+		return fast_sym_bits & 0x3ff;
+	}
+
+	uint32_t code = 0;
+	for (uint32_t bits = 1; bits < BFBXZ_HUFF_MAX_BITS; bits++) {
+		code = code << 1 | (stream->bits & 1);
+		stream->bits >>= 1;
+		stream->num_bits--;
+		if (code < tree->past_max_code[bits]) {
+			uint32_t sorted = code + tree->code_to_sorted[bits];
+			if (sorted >= tree->num_symbols) return ~0u;
+			return tree->sorted_to_sym[sorted];
+		}
+	}
+
+	return ~0u;
+}
+
+static void bfbxz_init_static(bfbxz_context *zc)
+{
+	uint8_t lit_length_bits[288];
+	memset(lit_length_bits +   0, 8, 144 -   0);
+	memset(lit_length_bits + 144, 9, 256 - 144);
+	memset(lit_length_bits + 256, 7, 280 - 256);
+	memset(lit_length_bits + 280, 8, 288 - 280);
+	bfbxz_huff_build(&zc->huff_lit_length, lit_length_bits, sizeof(lit_length_bits));
+
+	uint8_t dist_bits[32];
+	memset(dist_bits + 0, 5, 32 - 0);
+	bfbxz_huff_build(&zc->huff_dist, dist_bits, sizeof(dist_bits));
+}
+
+static int bfbxz_init_dynamic_tree(bfbxz_context *zc, const bfbxz_huff_tree *huff_code_length,
+	bfbxz_huff_tree *tree, uint32_t num_symbols)
+{
+	uint8_t code_lengths[BFBXZ_HUFF_MAX_VALUE];
+	if (num_symbols > BFBXZ_HUFF_MAX_VALUE) return 0;
+
+	uint32_t symbol_index = 0;
+	uint8_t prev = 0;
+	while (symbol_index < num_symbols) {
+		bfbxz_refill(&zc->stream);
+		uint32_t inst = bfbxz_huff_decode(huff_code_length, &zc->stream);
+		if (inst <= 15) {
+			prev = (uint8_t)inst;
+			code_lengths[symbol_index++] = (uint8_t)inst;
+		} else if (inst == 16) {
+			uint32_t num = 3 + (zc->stream.bits & 0x3);
+			zc->stream.bits >>= 2;
+			zc->stream.num_bits -= 2;
+			if (symbol_index + num > num_symbols) return 0;
+			memset(code_lengths + num_symbols, prev, num);
+			num_symbols += num;
+		} else if (inst == 17) {
+			uint32_t num = 3 + (zc->stream.bits & 0x7);
+			zc->stream.bits >>= 3;
+			zc->stream.num_bits -= 3;
+			if (symbol_index + num > num_symbols) return 0;
+			memset(code_lengths + num_symbols, 0, num);
+			num_symbols += num;
+			prev = 0;
+		} else if (inst == 18) {
+			uint32_t num = 11 + (zc->stream.bits & 0x7f);
+			zc->stream.bits >>= 7;
+			zc->stream.num_bits -= 7;
+			if (symbol_index + num > num_symbols) return 0;
+			memset(code_lengths + num_symbols, 0, num);
+			num_symbols += num;
+			prev = 0;
+		} else {
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static int bfbxz_init_dynamic(bfbxz_context *zc)
+{
+	bfbxz_refill(&zc->stream);
+
+	uint32_t bits = zc->stream.bits;
+	zc->stream.bits >>= 14;
+	zc->stream.num_bits -= 14;
+
+	uint32_t num_lit_lengths = 257 + (bits & 0x1f);
+	uint32_t num_dists = 1 + (bits >> 5 & 0x1f);
+	uint32_t num_code_lengths = 4 + (bits >> 9 & 0xf);
+	if (num_lit_lengths > 288) return 0;
+	if (num_dists > 32) return 0;
+	if (num_code_lengths > 18) return 0;
+
+	uint8_t code_lengths[18];
+	for (uint32_t i = 0; i < num_code_lengths; i++) {
+		bfbxz_refill(&zc->stream);
+		code_lengths[bfbxz_code_length_swizzle[i + 0]] = zc->stream.bits & 0x7;
+		zc->stream.bits >>= 3;
+		zc->stream.num_bits -= 3;
+	}
+	memset(code_lengths + num_code_lengths, 0, 32 - num_code_lengths);
+
+	bfbxz_huff_tree huff_code_length;
+	if (!bfbxz_huff_build(&huff_code_length, code_lengths, num_code_lengths)) {
+		return 0;
+	}
+	if (!bfbxz_init_dynamic_tree(zc, &huff_code_length, &zc->huff_lit_length, num_lit_lengths)) {
+		return 0;
+	}
+	if (!bfbxz_init_dynamic_tree(zc, &huff_code_length, &zc->huff_dist, num_dists)) {
+		return 0;
+	}
+
+	return 1;
+}
+
+static int bfbxz_decompress_block(bfbxz_context *zc)
+{
+	for (;;) {
+		bfbxz_refill(&zc->stream);
+
+		uint32_t lit_length = bfbxz_huff_decode(&zc->huff_lit_length, &zc->stream);
+		if (lit_length <= 255) {
+			if (zc->output_pos >= zc->output_size) return 0;
+			zc->output[zc->output_pos++] = (char)lit_length;
+		} else if (lit_length - 257 <= 285 - 257) {
+			uint32_t length, distance;
+
+			// Length
+			{
+				uint32_t base = bfbxz_length_base[lit_length - 257];
+				uint32_t bits = bfbxz_length_bits[lit_length - 257];
+				uint32_t offset = (zc->stream.bits & (1 << bits) - 1);
+				zc->stream.bits >>= bits;
+				zc->stream.num_bits -= bits;
+				length = base + offset;
+			}
+
+			// Distance
+			{
+				bfbxz_refill(&zc->stream);
+				uint32_t dist = bfbxz_huff_decode(&zc->huff_dist, &zc->stream);
+				if (dist >= 32) return 0;
+				// Need to refill again, max 15 + 13 bits in total!
+				bfbxz_refill(&zc->stream);
+				uint32_t base = bfbxz_dist_base[dist];
+				uint32_t bits = bfbxz_dist_bits[dist];
+				uint32_t offset = (zc->stream.bits & (1 << bits) - 1);
+				zc->stream.bits >>= bits;
+				zc->stream.num_bits -= bits;
+				distance = base + offset;
+			}
+
+			if (distance > zc->output_pos) return 0;
+			if (zc->output_pos + length > zc->output_size) return 0;
+			uint32_t begin = zc->output_pos;
+
+			char *dst = zc->output + zc->output_pos;
+			if (distance >= length) {
+				memcpy(dst, dst - distance, length);
+			} else {
+				uint32_t offset = 0;
+				uint32_t size = distance;
+				while (offset < length) {
+					uint32_t copy_size = size;
+					if (copy_size > length - offset) copy_size = length - offset;
+					memcpy(dst + offset, dst - distance, copy_size);
+					offset += copy_size;
+					size *= 2;
+				}
+			}
+			zc->output_pos += length;
+
+		} else if (lit_length == 256) {
+			return 1;
+		} else {
+			return 0;
+		}
+	}
+}
+
+static int bfbxz_inflate(void *dst, uint32_t dst_size, const void *src, uint32_t src_size)
+{
+	bfbxz_context zcontext, *zc = &zcontext;
+	zc->output = (char*)dst;
+	zc->output_pos = 0;
+	zc->output_size = dst_size;
+	zc->stream.data = (const char*)src;
+	zc->stream.size = src_size;
+	zc->stream.pos = 0;
+	zc->stream.num_bits = 0;
+	zc->stream.bits = 0;
+
+	// Zlib header
+	{
+		bfbxz_refill(&zc->stream);
+		uint8_t cmf = (zc->stream.bits & 0xff);
+		uint8_t flg = (zc->stream.bits >> 8);
+		zc->stream.bits >>= 16;
+		zc->stream.num_bits -= 16;
+
+		if ((cmf & 0xf) != 0x8) return 0; // Unknown compression method
+		if ((flg & 0x10) != 0) return 0; // Requires dictionary
+		if ((cmf << 8 | flg) % 31 != 0) return 0; // Bad FCHECK
+	}
+
+	for (;;) {
+		bfbxz_refill(&zc->stream);
+		uint32_t header = zc->stream.bits & 7;
+		zc->stream.bits >>= 3;
+		zc->stream.num_bits -= 3;
+
+		uint32_t type = header >> 1;
+		if (type == 0) {
+			uint32_t bits_bytes = zc->stream.num_bits / 8;
+			zc->stream.pos -= bits_bytes;
+			zc->stream.bits = 0;
+			zc->stream.num_bits = 0;
+
+			const uint8_t *len_head = (const uint8_t*)(zc->stream.data + zc->stream.pos);
+			uint16_t len = (uint16_t)len_head[0] | (uint16_t)len_head[1] << 8;
+			uint16_t nlen = (uint16_t)len_head[2] | (uint16_t)len_head[3] << 8;
+			if (len != (uint16_t)~nlen) return 0;
+			if (zc->stream.pos + len > zc->stream.size) return 0;
+			if (zc->output_pos + len > zc->output_size) return 0;
+
+			const void *src = zc->stream.data + zc->stream.pos;
+			void *dst = zc->output + zc->output_pos;
+			memcpy(dst, src, len);
+
+			zc->output_pos += len;
+			zc->stream.pos += len;
+
+		} else if (type <= 2) {
+			if (type == 1) {
+				bfbxz_init_static(zc);
+			} else {
+				if (!bfbxz_init_dynamic(zc)) return 0;
+			}
+
+			if (!bfbxz_decompress_block(zc)) return 0;
+
+		} else {
+			return 0;
+		}
+
+		if (header & 1) break;
+	}
+
+	return 1;
+}
+
 // -- Utility
 
 #define bfbx_arraycount(arr) (sizeof(arr) / sizeof(*(arr)))
 
-const char *bfbx_prop_type_str(bfbx_prop_type type)
+static const char *bfbx_prop_type_str(bfbx_prop_type type)
 {
 	switch (type) {
 	case bfbx_prop_s16: return "s16 (Y)";
@@ -638,6 +1046,42 @@ static int bfbx_skip_props(bfbx_ctx *bc, uint32_t amount)
 	return 1;
 }
 
+// NOTE: Only one returned pointer can be active at a time per context
+static const void *bfbx_get_array_data(bfbx_ctx *bc, const bfbx_farray *array, bfbx_prop_type type)
+{
+	if (array->encoding == 0) {
+		return array->compressed_data;
+	} else if (array->encoding == 1) {
+		uint32_t elem_size = 0;
+		switch (type) {
+		case bfbx_prop_array_s32: elem_size = 4; break;
+		case bfbx_prop_array_s64: elem_size = 8; break;
+		case bfbx_prop_array_f32: elem_size = 4; break;
+		case bfbx_prop_array_f64: elem_size = 8; break;
+		default:
+			bfbx_error(bc, "Invalid array type %s", bfbx_prop_type_str(type));
+			return 0;
+		}
+		uint32_t decompressed_size = array->length * elem_size;
+		uint32_t round_size = bfbx_to_pow2(decompressed_size);
+		if (bc->decompress_bytes < round_size) {
+			bc->decompress_buffer = realloc(bc->decompress_buffer, round_size);
+			bc->decompress_bytes = round_size;
+		}
+
+		if (!bfbxz_inflate(bc->decompress_buffer, decompressed_size,
+			array->compressed_data, array->compressed_bytes)) {
+			bfbx_error(bc, "Failed to decompress array");
+			return NULL;
+		}
+
+		return bc->decompress_buffer;
+	} else {
+		bfbx_error(bc, "Unknown array encoding %u", array->encoding);
+		return NULL;
+	}
+}
+
 // -- Property converters
 
 static int bfbx_prop_to_string(bfbx_ctx *bc, const bfbx_fprop *prop, bfbx_fstring *dst)
@@ -664,7 +1108,7 @@ static int bfbx_prop_to_u64(bfbx_ctx *bc, const bfbx_fprop *prop, uint64_t *dst)
 	case bfbx_prop_s32: *dst = (uint64_t)prop->value.s32; break;
 	case bfbx_prop_s64: *dst = (uint64_t)prop->value.s64; break;
 	default:
-		bfbx_error(bc, "Cannot convert %s to uint64", bfbx_prop_type_str(prop->type));
+		bfbx_error(bc, "Cannot convert %s to u64", bfbx_prop_type_str(prop->type));
 		return 0;
 	}
 	return 1;
@@ -685,7 +1129,7 @@ static int bfbx_prop_to_f64(bfbx_ctx *bc, const bfbx_fprop *prop, double *dst)
 	case bfbx_prop_f32: *dst = (double)prop->value.f32; break;
 	case bfbx_prop_f64: *dst = prop->value.f64; break;
 	default:
-		bfbx_error(bc, "Cannot convert %s to double", bfbx_prop_type_str(prop->type));
+		bfbx_error(bc, "Cannot convert %s to f64", bfbx_prop_type_str(prop->type));
 		return 0;
 	}
 	return 1;
@@ -696,6 +1140,52 @@ static int bfbx_parse_to_f64(bfbx_ctx *bc, double *dst)
 	bfbx_fprop p;
 	return bfbx_parse_prop(bc, &p) && bfbx_prop_to_f64(bc, &p, dst);
 }
+
+static int bfbx_prop_to_array_f64(bfbx_ctx *bc, const bfbx_fprop *prop, double *dst)
+{
+	if (!bfbx_is_array(prop->type)) {
+		bfbx_error(bc, "Cannot convert %s to f64 array", bfbx_prop_type_str(prop->type));
+		return 0;
+	}
+
+	const bfbx_farray *array = &prop->value.array;
+	const void *data = bfbx_get_array_data(bc, array, prop->type);
+	if (!data) return 0;
+
+	uint32_t num = array->length;
+
+	switch (prop->type) {
+	case bfbx_prop_array_s32: {
+		for (const int32_t *src = (const int32_t*)data, *end = src + num; src != end; src++) {
+			*dst++ = (double)*src;
+		}
+	} break;
+	case bfbx_prop_array_s64: {
+		for (const int64_t *src = (const int64_t*)data, *end = src + num; src != end; src++) {
+			*dst++ = (double)*src;
+		}
+	} break;
+	case bfbx_prop_array_f32: {
+		for (const float *src = (const float*)data, *end = src + num; src != end; src++) {
+			*dst++ = (double)*src;
+		}
+	} break;
+	case bfbx_prop_array_f64: {
+		memcpy(dst, data, num * sizeof(double));
+	} break;
+	default:
+		bfbx_error(bc, "Cannot convert %s to f64 array", bfbx_prop_type_str(prop->type));
+		return 0;
+	}
+	return 1;
+}
+
+static int bfbx_parse_to_array_f64(bfbx_ctx *bc, double *dst)
+{
+	bfbx_fprop p;
+	return bfbx_parse_prop(bc, &p) && bfbx_prop_to_array_f64(bc, &p, dst);
+}
+
 
 // -- Document property parsers
 
@@ -987,6 +1477,68 @@ static int bfbx_doc_section_definitions(bfbx_ctx *bc, bfbx_fnode *section)
 	return 1;
 }
 
+static int bfbx_doc_object_mesh(bfbx_ctx *bc, bfbx_fnode *obj_node, bqq_fbx_base *object)
+{
+	bqq_fbx_mesh *mesh = (bqq_fbx_mesh*)object;
+
+	bfbx_fnode child;
+	while (bfbx_parse_child(bc, obj_node, &child)) {
+		if (bc->failed) return 0;
+
+		if (bfbx_streq(&child.name, "Properties70")) {
+			bfbx_dprop_map *prop_map = &bc->object_types[object->type].prop_map;
+			if (!bfbx_doc_properties70(bc, &child, object, prop_map)) return 0;
+		} else if (bfbx_streq(&child.name, "Vertices")) {
+			if (child.prop_count != 1) {
+				bfbx_error(bc, "Invalid amount of properties for Vertices: %u", child.prop_count);
+				return 0;
+			}
+			bfbx_fprop prop;
+			if (!bfbx_parse_prop(bc, &prop)) return 0;
+			if (!bfbx_is_array(prop.type)) {
+				bfbx_error(bc, "Vertices is not an array");
+				return 0;
+			}
+
+			uint32_t array_size = prop.value.array.length;
+			if (array_size % 3 != 0) {
+				bfbx_error(bc, "Vertices array is not divisble by 3: %u", array_size);
+				return 0;
+			}
+
+			mesh->num_vertices = array_size / 3;
+			mesh->vertex_positions = bfbx_push_result(bqq_fbx_vec3, bc, mesh->num_vertices);
+
+			if (!bfbx_prop_to_array_f64(bc, &prop, (double*)mesh->vertex_positions)) return 0;
+
+		} else {
+			// Unknown child node, skip it
+			bc->pos = child.end_offset;
+		}
+	}
+
+	return 1;
+}
+
+static int bfbx_doc_object_generic(bfbx_ctx *bc, bfbx_fnode *obj_node, bqq_fbx_base *object)
+{
+	bfbx_fnode child;
+	while (bfbx_parse_child(bc, obj_node, &child)) {
+		if (bc->failed) return 0;
+
+		if (bfbx_streq(&child.name, "Properties70")) {
+			bfbx_dprop_map *prop_map = &bc->object_types[object->type].prop_map;
+			if (!bfbx_doc_properties70(bc, &child, object, prop_map)) return 0;
+		} else {
+			// Unknown child node, skip it
+			bc->pos = child.end_offset;
+		}
+	}
+
+	return 1;
+}
+
+
 static int bfbx_doc_object(bfbx_ctx *bc, bfbx_fnode *obj_node)
 {
 	if (obj_node->prop_count < 3) {
@@ -1018,11 +1570,11 @@ static int bfbx_doc_object(bfbx_ctx *bc, bfbx_fnode *obj_node)
 
 	bfbx_object_type *obj_type = &bc->object_types[type];
 
-	bqq_fbx_base *base = (bqq_fbx_base*)bfbx_alloc_result(bc, obj_type->size);
-	if (!base) return 0;
-	memcpy(base, obj_type->default_value, obj_type->size);
+	bqq_fbx_base *object = (bqq_fbx_base*)bfbx_alloc_result(bc, obj_type->size);
+	if (!object) return 0;
+	memcpy(object, obj_type->default_value, obj_type->size);
 
-	base->id = id;
+	object->id = id;
 
 	// Truncate name to \x00\x01 separating name and class
 	for (uint32_t i = 0; i + 1 < name.length; i++) {
@@ -1031,24 +1583,17 @@ static int bfbx_doc_object(bfbx_ctx *bc, bfbx_fnode *obj_node)
 			break;
 		}
 	}
-	base->name = bfbx_result_string(bc, &name);
+	object->name = bfbx_result_string(bc, &name);
 
-	bfbx_fnode child;
-	while (bfbx_parse_child(bc, obj_node, &child)) {
-		if (bc->failed) return 0;
-
-		if (bfbx_streq(&child.name, "Properties70")) {
-			bfbx_dprop_map *prop_map = &bc->object_types[type].prop_map;
-			if (!bfbx_doc_properties70(bc, &child, base, prop_map)) return 0;
-		} else {
-			// Unknown child node, skip it
-			bc->pos = child.end_offset;
-		}
+	if (type == bqq_fbx_type_mesh) {
+		bfbx_doc_object_mesh(bc, obj_node, object);
+	} else {
+		bfbx_doc_object_generic(bc, obj_node, object);
 	}
 
 	bqq_fbx_base **ptr = bfbx_append(bc, &bc->all_objects, bqq_fbx_base*);
 	if (!ptr) return 0;
-	*ptr = base;
+	*ptr = object;
 
 	return 1;
 }
@@ -1098,22 +1643,27 @@ static int bfbx_doc_connection(bfbx_ctx *bc, bfbx_fnode *node)
 			bqq_fbx_node *parent_node = (bqq_fbx_node*)parent;
 			switch (child->type) {
 			case bqq_fbx_type_node:
+				bc->scene->num_nodes++;
 				parent_node->num_nodes++;
 				((bqq_fbx_node*)child)->parent = parent_node;
 				break;
 			case bqq_fbx_type_mesh:
+				bc->scene->num_meshes++;
 				parent_node->num_meshes++;
 				((bqq_fbx_mesh*)child)->parent = parent_node;
 				break;
 			case bqq_fbx_type_material:
+				bc->scene->num_materials++;
 				parent_node->num_materials++;
 				((bqq_fbx_material*)child)->parent = parent_node;
 				break;
 			case bqq_fbx_type_light:
+				bc->scene->num_lights++;
 				parent_node->num_lights++;
 				((bqq_fbx_light*)child)->parent = parent_node;
 				break;
 			case bqq_fbx_type_camera:
+				bc->scene->num_cameras++;
 				parent_node->num_cameras++;
 				((bqq_fbx_camera*)child)->parent = parent_node;
 				break;
@@ -1143,6 +1693,7 @@ static int bfbx_doc_section_connections(bfbx_ctx *bc, bfbx_fnode *section)
 
 static int bfbx_doc_root(bfbx_ctx *bc)
 {
+	bqq_fbx_scene *scene = bc->scene;
 	uint32_t begin_pos = bc->pos;
 	bfbx_fnode section;
 
@@ -1274,6 +1825,30 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 		}
 	}
 
+	// Do the same for the global scene lists
+	{
+		if (scene->num_nodes > 0) {
+			scene->nodes = bfbx_push_result(bqq_fbx_node*, bc, scene->num_nodes);
+			scene->num_nodes = 0;
+		}
+		if (scene->num_meshes > 0) {
+			scene->meshes = bfbx_push_result(bqq_fbx_mesh*, bc, scene->num_meshes);
+			scene->num_meshes = 0;
+		}
+		if (scene->num_materials > 0) {
+			scene->materials = bfbx_push_result(bqq_fbx_material*, bc, scene->num_materials);
+			scene->num_materials = 0;
+		}
+		if (scene->num_lights > 0) {
+			scene->lights = bfbx_push_result(bqq_fbx_light*, bc, scene->num_lights);
+			scene->num_lights = 0;
+		}
+		if (scene->num_cameras > 0) {
+			scene->cameras = bfbx_push_result(bqq_fbx_camera*, bc, scene->num_cameras);
+			scene->num_cameras = 0;
+		}
+	}
+
 	// Add to parent arrays and increment counts back
 	for (uint32_t i = 0; i < bc->scene->num_objects; i++) {
 		bqq_fbx_base *child = bc->scene->objects[i];
@@ -1288,18 +1863,23 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 			switch (child->type) {
 			case bqq_fbx_type_node:
 				node->nodes[node->num_nodes++] = (bqq_fbx_node*)child;
+				scene->nodes[scene->num_nodes++] = (bqq_fbx_node*)child;
 				break;
 			case bqq_fbx_type_mesh:
 				node->meshes[node->num_meshes++] = (bqq_fbx_mesh*)child;
+				scene->meshes[scene->num_meshes++] = (bqq_fbx_mesh*)child;
 				break;
 			case bqq_fbx_type_material:
 				node->materials[node->num_materials++] = (bqq_fbx_material*)child;
+				scene->materials[scene->num_materials++] = (bqq_fbx_material*)child;
 				break;
 			case bqq_fbx_type_light:
 				node->lights[node->num_lights++] = (bqq_fbx_light*)child;
+				scene->lights[scene->num_lights++] = (bqq_fbx_light*)child;
 				break;
 			case bqq_fbx_type_camera:
 				node->cameras[node->num_cameras++] = (bqq_fbx_camera*)child;
+				scene->cameras[scene->num_cameras++] = (bqq_fbx_camera*)child;
 				break;
 			}
 		}
@@ -1363,10 +1943,12 @@ bqq_fbx_scene *bqq_fbx_parse_memory(const void *data, size_t size, bqq_fbx_error
 	if (!bfbx_parse_header(bc)) goto error;
 	if (!bfbx_doc_root(bc)) goto error;
 
+	free(bc->decompress_buffer);
 	bfbx_free_chunk(bc->temp_arena.chunk);
 	internal_scene->result_allocation = bc->result_arena.chunk;
 	return scene;
 error:
+	free(bc->decompress_buffer);
 	bfbx_free_chunk(bc->temp_arena.chunk);
 	bfbx_free_chunk(bc->result_arena.chunk);
 	return NULL;
