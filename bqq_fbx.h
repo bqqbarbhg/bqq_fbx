@@ -51,6 +51,15 @@ struct bqq_fbx_node_s {
 	double local_rotation[3];    // < Euler angle rotation relative to parent node
 	double local_scaling[3];     // < Scaling relative to parent node
 
+	double rotation_offset[3];   // < TODOC
+	double rotation_pivot[3];    // < TODOC
+	double scaling_offset[3];    // < TODOC
+	double scaling_pivot[3];     // < TODOC
+
+	double geometric_translation[3]; // < TODOC
+	double geometric_rotation[3];    // < TODOC
+	double geometric_scaling[3];     // < TODOC
+
 	bqq_fbx_node *parent;
 
 	uint32_t num_nodes;

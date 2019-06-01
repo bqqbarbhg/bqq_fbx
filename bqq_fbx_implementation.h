@@ -749,6 +749,13 @@ static const bfbx_dprop_desc bfbx_node_props[] = {
 	{ "Lcl Translation", offsetof(bqq_fbx_node, local_translation), bfbx_dp_vec3 },
 	{ "Lcl Rotation", offsetof(bqq_fbx_node, local_rotation), bfbx_dp_vec3 },
 	{ "Lcl Scaling", offsetof(bqq_fbx_node, local_scaling), bfbx_dp_vec3 },
+	{ "RotationOffset", offsetof(bqq_fbx_node, rotation_offset), bfbx_dp_vec3 },
+	{ "RotationPivot", offsetof(bqq_fbx_node, rotation_pivot), bfbx_dp_vec3 },
+	{ "ScalingOffset", offsetof(bqq_fbx_node, scaling_offset), bfbx_dp_vec3 },
+	{ "ScalingPivot", offsetof(bqq_fbx_node, scaling_pivot), bfbx_dp_vec3 },
+	{ "GeometricTranslation", offsetof(bqq_fbx_node, geometric_translation), bfbx_dp_vec3 },
+	{ "GeometricRotation", offsetof(bqq_fbx_node, geometric_rotation), bfbx_dp_vec3 },
+	{ "GeometricScaling", offsetof(bqq_fbx_node, geometric_scaling), bfbx_dp_vec3 },
 };
 
 static const bfbx_dprop_desc bfbx_light_props[] = {
@@ -857,6 +864,89 @@ static int bfbx_doc_properties70(bfbx_ctx *bc, bfbx_fnode *parent, void *dst, co
 	return 1;
 }
 
+static int bfbx_doc_defaults70(bfbx_ctx *bc, uint32_t offset, bfbx_fnode *parent, bqq_fbx_type type)
+{
+	bc->pos = offset;
+	bfbx_object_type *object_type = &bc->object_types[type];
+	return bfbx_doc_properties70(bc, parent, object_type->default_value, &object_type->prop_map);
+}
+
+static int bfbx_doc_template(bfbx_ctx *bc, bfbx_fnode *parent, bfbx_fstring *type)
+{
+	bfbx_fnode child;
+	while (bfbx_parse_child(bc, parent, &child)) {
+		if (bc->failed) return 0;
+
+		if (bfbx_streq(&child.name, "Properties70")) {
+			uint32_t offset = bc->pos;
+
+			if (bfbx_streq(type, "Model")) {
+				if (!bfbx_doc_defaults70(bc, offset, &child, bqq_fbx_type_node)) return 0;
+			} else if (bfbx_streq(type, "Geometry")) {
+				if (!bfbx_doc_defaults70(bc, offset, &child, bqq_fbx_type_mesh)) return 0;
+			} else if (bfbx_streq(type, "Material")) {
+				if (!bfbx_doc_defaults70(bc, offset, &child, bqq_fbx_type_material)) return 0;
+			} else if (bfbx_streq(type, "NodeAttribute")) {
+				if (!bfbx_doc_defaults70(bc, offset, &child, bqq_fbx_type_camera)) return 0;
+				if (!bfbx_doc_defaults70(bc, offset, &child, bqq_fbx_type_light)) return 0;
+			} else {
+				// No structs to copy template into
+				bc->pos = child.end_offset;
+			}
+
+		} else {
+			// Unknown child node, skip it
+			bc->pos = child.end_offset;
+		}
+	}
+
+	return 1;
+}
+
+static int bfbx_doc_definition(bfbx_ctx *bc, bfbx_fnode *def_node)
+{
+	if (bfbx_streq(&def_node->name, "ObjectType")) {
+		if (def_node->prop_count < 1) {
+			bfbx_error(bc, "Not enough properties for ObjectType");
+			return 0;
+		}
+
+		bfbx_fstring name;
+		if (!bfbx_parse_to_string(bc, &name)) return 0;
+
+		bfbx_fnode child;
+		while (bfbx_parse_child(bc, def_node, &child)) {
+			if (bc->failed) return 0;
+
+			if (bfbx_streq(&child.name, "PropertyTemplate")) {
+				bfbx_skip_props(bc, child.prop_count);
+				bfbx_doc_template(bc, &child, &name);
+			} else {
+				// Unknown child node, skip it
+				bc->pos = child.end_offset;
+			}
+		}
+
+	} else {
+		// Ignore unknown definitions
+		bc->pos = def_node->end_offset;
+		return 1;
+	}
+
+	return 1;
+}
+
+static int bfbx_doc_section_definitions(bfbx_ctx *bc, bfbx_fnode *section)
+{
+	bfbx_fnode def_node;
+	while (bfbx_parse_child(bc, section, &def_node)) {
+		if (bc->failed) return 0;
+		if (!bfbx_doc_definition(bc, &def_node)) return 0;
+	}
+
+	return 1;
+}
+
 static int bfbx_doc_object(bfbx_ctx *bc, bfbx_fnode *obj_node)
 {
 	if (obj_node->prop_count < 3) {
@@ -948,6 +1038,7 @@ static int bfbx_doc_root(bfbx_ctx *bc)
 			if (section.end_offset == 0) break;
 			if (bc->failed) return 0;
 			if (bfbx_streq(&section.name, "Definitions")) {
+				if (!bfbx_doc_section_definitions(bc, &section)) return 0;
 				found = 1;
 				break;
 			} else {
@@ -1030,6 +1121,10 @@ bqq_fbx_scene *bqq_fbx_parse_file(const char *filename, bqq_fbx_error *error)
 
 bqq_fbx_scene *bqq_fbx_parse_memory(const void *data, size_t size, bqq_fbx_error *error)
 {
+	if (error) {
+		memset(error, 0, sizeof(bqq_fbx_error));
+	}
+
 	if (size > UINT32_MAX) {
 		bfbx_errorf(error, "Memory data is too big (%.2fGB) FBX supports up to 4GB",
 			(double)size / 1e9);
@@ -1041,7 +1136,6 @@ bqq_fbx_scene *bqq_fbx_parse_memory(const void *data, size_t size, bqq_fbx_error
 	bc->error = error;
 	bc->data = (const char*)data;
 	bc->size = size;
-
 
 	bfbx_scene *internal_scene = (bfbx_scene*)bfbx_alloc_result(bc, sizeof(bfbx_scene));
 	bqq_fbx_scene *scene = NULL;
