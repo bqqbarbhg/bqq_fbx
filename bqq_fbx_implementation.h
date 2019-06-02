@@ -590,6 +590,7 @@ static int bfbxz_decompress_block(bfbxz_context *zc)
 	}
 
 	zc->output_pos = (uint32_t)(out_ptr - out_begin);
+	return 1;
 }
 
 static int bfbxz_inflate(void *dst, uint32_t dst_size, const void *src, uint32_t src_size)
